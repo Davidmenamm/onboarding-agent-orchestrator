@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph Applicant["Applicant app"]
+        A1[Start: form<br/>name · document id · product<br/>inline validation] --> A2[Live progress timeline<br/>SSE: identity ✓ risk ✓ docs …]
+        A2 --> A3{outcome}
+        A3 -- approved --> A4[Result + required docs checklist<br/>next steps]
+        A3 -- info needed --> A5[Conversational request<br/>upload / answer] --> A2
+        A3 -- under review --> A6[Under review screen<br/>ETA + notification]
+        A3 -- rejected --> A7[Respectful rejection<br/>reason category + contact]
+        A3 -- error --> A8[Clear error + correlation id + retry]
+    end
+    subgraph Analyst["Analyst console (role: analyst)"]
+        B1[Review queue<br/>filter/sort by reason, age, product<br/>SLA badges] --> B2[Case detail]
+        B2 --> B3[Agent results: confidence bars,<br/>risk matches, RAG citations]
+        B2 --> B4[Supervisor reasoning trail<br/>+ guard overrides + fallbacks]
+        B2 --> B5[PII masked · Reveal with reason → audited]
+        B2 --> B6[Actions: approve / reject / request info<br/>notes required · confirm dialog]
+        B6 --> B1
+    end
+    subgraph Admin["Admin (role: admin)"]
+        C1[Analytics dashboard<br/>STP rate · escalation reasons ·<br/>override rate · p95 latency · LLM cost]
+        C2[Knowledge base<br/>upload docs · re-ingest · eval score]
+        C3[Hard rules editor<br/>versioned thresholds/tags]
+    end

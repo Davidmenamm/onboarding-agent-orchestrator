@@ -1,0 +1,15 @@
+flowchart LR
+    IN["Request<br/>name='Juan Perez'<br/>document_id='1712345678'"] --> V[Validate<br/>Pydantic]
+    V --> VAULT[(PII vault<br/>AES-GCM encrypted columns<br/>HMAC hash for lookup)]
+    V --> REF["prospect_ref = UUID<br/>pseudonyms: PERSON_1, DOC_1"]
+    REF --> STATE[Graph state + checkpoints<br/>no raw PII<br/>+ encrypted serializer]
+    STATE --> LLM[OpenRouter LLM<br/>sees PERSON_1 only]
+    STATE --> TOOLS[Tools<br/>resolve real values<br/>from vault internally]
+    VAULT --> TOOLS
+    FREE[Free text: client msgs,<br/>analyst notes] --> PRES[Presidio<br/>detect + redact] --> LLM
+    STATE --> EV[(Events<br/>pseudonymous)]
+    EV --> AN[(Analytics schema<br/>aggregates, k>=5)]
+    AN --> GR[Grafana / UI dashboard]
+    STATE --> OUT[Final response<br/>re-identified only at render]
+    VAULT --> OUT
+    LOGS[Logs] -. masking processor .- STATE

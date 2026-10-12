@@ -1,0 +1,24 @@
+flowchart TD
+    subgraph L1[Client → API]
+        C1[Idempotency-Key header<br/>unique constraint] --> C2[TanStack Query retry<br/>exp backoff on 5xx/429]
+    end
+    subgraph L2[Job layer]
+        J1[procrastinate job<br/>3 attempts, exp backoff + jitter] --> J2{still failing?}
+        J2 -- yes --> J3[status=failed<br/>dead-letter → analyst queue<br/>alert fires]
+    end
+    subgraph L3[Graph nodes]
+        N1[LangGraph RetryPolicy<br/>max 3, backoff 2x, jitter<br/>timeout per tool 10s] --> N2{exhausted?}
+        N2 -- yes --> N3[error recorded in state<br/>supervisor decides next<br/>guard: no approval without data]
+    end
+    subgraph L4[LLM]
+        M1[timeout 30s, 2 retries] --> M2[OpenRouter fallback models]
+        M2 --> M3[circuit breaker<br/>5 fails → open 60s]
+        M3 -- open --> M4[pause at interrupt<br/>→ human analyst]
+        M5[invalid structured output] --> M6[1 repair retry] --> M4
+    end
+    subgraph L5[RAG + DB]
+        R1[vector fails → full-text only] --> R2[nothing found → low-relevance → human]
+        D1[pool pre-ping + transient retry] --> D2[checkpoint = resume where it died]
+    end
+    FAIL["FAIL LOUD + FAIL CLOSED<br/>never auto-approve on error<br/>every fallback = event + metric + UI badge<br/>errors carry correlation_id to the user"]
+    J3 & N3 & M4 & R2 --> FAIL

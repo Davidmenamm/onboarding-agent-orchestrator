@@ -1,0 +1,34 @@
+flowchart TD
+    START((START)) --> IN[intake<br/>validate · pseudonymize<br/>load hard rules from DB]
+    IN --> SUP
+
+    subgraph BRAIN["LLM decides: order, retries, which agent, remediation, final verdict"]
+        SUP{{"Supervisor LLM (glm-5.3-flashx)<br/>reads state + RAG policy context<br/>outputs: next_agents[], rationale, uncertainty"}}
+    end
+
+    SUP --> GUARD{"Hard-rule guard (code)<br/>ONLY thresholds and tags:<br/>confidence < 0.8 · risk == high<br/>verified == false · step budget"}
+
+    GUARD -- "passes" --> ROUTE{dispatch<br/>Send fan-out}
+    GUARD -- "violates a hard rule<br/>e.g. approve with conf 0.65" --> VETO[Veto: force human review<br/>emit guard_override event]
+    VETO --> HITL
+
+    SUP -. "primary LLM fails" .-> FB[Fallback LLM chain<br/>flashx → glm-5.3-flash → glm-4.7-flash]
+    FB -. "all LLMs down<br/>(circuit open)" .-> HITL
+
+    ROUTE --> ID[Identity agent<br/>allowlist: verify_identity]
+    ROUTE --> RK[Risk agent<br/>allowlist: check_risk_lists]
+    ROUTE --> DOC[Documentation agent<br/>allowlist: prepare_documentation, search_policies]
+    ROUTE --> REM[Remediation agent<br/>allowlist: search_policies]
+    ROUTE --> RESP[Response agent<br/>allowlist: search_policies]
+
+    ID -- "raw tool output → state" --> SUP
+    RK -- "raw tool output → state" --> SUP
+    DOC --> SUP
+
+    REM -- "proposal needs analyst" --> HITL[["interrupt()<br/>Analyst review"]]
+    REM -- "proposal needs client data" --> CLI[["interrupt()<br/>Ask applicant"]]
+    HITL -- "approve / reject / request info + notes" --> SUP
+    CLI -- "applicant reply (Presidio-redacted)" --> SUP
+
+    RESP -- "template fallback if LLM down" --> FIN[finalize<br/>guard re-checks verdict<br/>re-identify · emit events]
+    FIN --> END((END))

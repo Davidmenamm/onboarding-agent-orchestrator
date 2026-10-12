@@ -1,0 +1,38 @@
+flowchart LR
+    DEV[Developer] -->|pre-commit: ruff, mypy,<br/>eslint, prettier, gitleaks| GIT[(GitHub repo)]
+    GIT --> CI
+
+    subgraph CI["GitHub Actions"]
+        direction TB
+        L[lint + typecheck] --> UT[unit tests<br/>pytest · vitest]
+        UT --> IT[integration<br/>Postgres+pgvector service]
+        IT --> RE[RAG eval]
+        RE --> B[build images]
+        B --> SC[Trivy scan]
+        SC --> E2E[compose up → Playwright E2E<br/>+ axe a11y]
+        E2E --> P[push GHCR<br/>semver tag]
+    end
+
+    P --> LOCAL
+    P --> FREE
+    P -.later.-> AZ
+
+    subgraph LOCAL["Stage 1: local (docker compose)"]
+        LN[nginx] --> LA[api ×2] & LW[worker ×2]
+        LA & LW --> LP[(postgres+pgvector)]
+        LK[keycloak]
+        LO[prometheus · grafana · langfuse<br/>profile: observability]
+    end
+
+    subgraph FREE["Stage 2: free cloud"]
+        FV["Same compose on a free VM<br/>(e.g. Oracle Always Free ARM)<br/>Caddy/nginx TLS · Let's Encrypt"]
+    end
+
+    subgraph AZ["Stage 3: Azure"]
+        AFD[Front Door / App Gateway] --> ACA[Container Apps<br/>api + workers, KEDA on queue depth]
+        ACA --> APG[(PostgreSQL Flexible Server<br/>+ pgvector)]
+        ACA --> KV[Key Vault + Managed Identity]
+        ENT[Entra ID] -.replaces.- KCX[Keycloak]
+        AMG[Managed Prometheus + Grafana]
+        TF[OpenTofu IaC]
+    end

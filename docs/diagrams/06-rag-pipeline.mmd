@@ -1,0 +1,22 @@
+flowchart LR
+    subgraph Ingest["Ingestion (worker job, idempotent)"]
+        SRC["knowledge/<br/>policies · KYC/AML procedures<br/>escalation playbooks · product sheets<br/>(md, pdf, docx)"] --> LOAD[Load + normalize<br/>unstructured / pypdf]
+        LOAD --> CHUNK["Heading-aware chunking<br/>~500 tokens, 50 overlap"]
+        CHUNK --> META["Metadata<br/>doc_id · product · section<br/>version · effective_date · sha256"]
+        META --> EMB[FastEmbed<br/>bge-small-en-v1.5, 384d, local]
+        EMB --> UPS[(rag.chunks<br/>upsert by hash<br/>HNSW vector idx + GIN tsvector)]
+    end
+
+    subgraph Query["Retrieval (search_policies tool)"]
+        Q[agent query + product filter] --> V[vector top-20]
+        Q --> FT[full-text top-20]
+        V & FT --> RRF[Reciprocal Rank Fusion]
+        RRF --> RR[cross-encoder rerank<br/>top-5]
+        RR --> TH{"best score<br/>≥ min_relevance?"}
+        TH -- yes --> CTX[context + citations]
+        TH -- no --> UNC[low-relevance signal<br/>→ uncertainty to supervisor]
+    end
+
+    UPS --> V & FT
+    V -. "pgvector down" .-> FT
+    EVAL[Golden Q&A set<br/>hit@5 · MRR in CI] -.-> Query

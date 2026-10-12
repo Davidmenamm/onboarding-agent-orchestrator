@@ -1,0 +1,84 @@
+erDiagram
+    PROSPECT ||--o{ ONBOARDING : has
+    ONBOARDING ||--o{ ONBOARDING_EVENT : emits
+    ONBOARDING ||--o{ REVIEW : "escalated to"
+    ONBOARDING }o--|| PRODUCT : for
+    PRODUCT ||--o{ REQUIRED_DOCUMENT : requires
+    HARD_RULE }o--|| PRODUCT : "applies to (or global)"
+    RAG_DOCUMENT ||--o{ RAG_CHUNK : "split into"
+    ONBOARDING ||--|| FACT_ONBOARDING : "projected to"
+
+    PROSPECT {
+        uuid id PK
+        bytea name_enc "AES-GCM"
+        bytea document_id_enc "AES-GCM"
+        text document_hash "HMAC-SHA256, unique"
+        timestamptz purge_after "retention"
+    }
+    ONBOARDING {
+        uuid id PK "= langgraph thread_id"
+        uuid prospect_id FK
+        text product_code FK
+        text status "received..approved/rejected/failed"
+        text decision
+        text idempotency_key UK
+        timestamptz created_at
+    }
+    ONBOARDING_EVENT {
+        bigserial id PK
+        uuid onboarding_id FK
+        text type "agent_started, tool_result, guard_override, fallback_used..."
+        jsonb payload "pseudonymous only"
+        text actor "agent / analyst / system"
+        text correlation_id
+        timestamptz ts
+    }
+    REVIEW {
+        uuid id PK
+        uuid onboarding_id FK
+        text reasons "low_confidence, high_risk, failure"
+        jsonb proposal "remediation + citations"
+        text analyst_sub "Keycloak subject"
+        text action "approve/reject/request_info"
+        text notes
+    }
+    PRODUCT {
+        text code PK "cuenta_ahorros..."
+        text label_en
+        int version
+    }
+    REQUIRED_DOCUMENT {
+        text product_code FK
+        text doc_code
+        bool edd_only
+    }
+    HARD_RULE {
+        text code PK "min_identity_confidence"
+        text kind "threshold | tag"
+        jsonb value "0.8 | 'high'"
+        text effect "require_human_review | block_approval"
+        int version
+    }
+    RAG_DOCUMENT {
+        uuid id PK
+        text source_path
+        text sha256
+        date effective_date
+    }
+    RAG_CHUNK {
+        uuid id PK
+        uuid document_id FK
+        vector embedding "384d, HNSW"
+        tsvector fts "GIN"
+        jsonb metadata
+    }
+    FACT_ONBOARDING {
+        uuid onboarding_id
+        text product_code
+        text decision
+        text escalation_reasons
+        bool analyst_override
+        bool fallback_used
+        int duration_ms
+        numeric llm_cost_usd
+    }

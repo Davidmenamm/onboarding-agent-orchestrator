@@ -1,0 +1,55 @@
+flowchart LR
+    subgraph Users
+        direction TB
+        A[Applicant browser]
+        AN[Analyst / Admin browser]
+    end
+
+    NG["Nginx<br/>load balancer · TLS · rate limit<br/>serves React build · SSE passthrough"]
+
+    subgraph App["Application tier (stateless, scale horizontally)"]
+        direction TB
+        API["FastAPI × 2<br/>REST + SSE · auth · idempotency"]
+        W["Workers × N<br/>LangGraph runtime<br/>supervisor + 5 sub-agents<br/>guard · PII · RAG"]
+    end
+
+    subgraph PG["PostgreSQL 17 + pgvector (one instance, schemas)"]
+        direction TB
+        S1[(app: onboardings · events<br/>encrypted PII vault)]
+        S5[(queue: procrastinate jobs)]
+        S2[(langgraph: checkpoints)]
+        S3[(rag: chunks HNSW + FTS)]
+        S4[(policy: products · hard rules)]
+        S6[(analytics: pseudonymous facts)]
+    end
+
+    subgraph EXT["External (only non-local piece)"]
+        OR["OpenRouter<br/>glm-5.3-flashx → fallbacks"]
+    end
+
+    KC["Keycloak<br/>OIDC: applicant · analyst · admin"]
+    EMB["FastEmbed + reranker<br/>local, in worker"]
+
+    subgraph OBS["Observability (compose profile)"]
+        direction TB
+        PR[Prometheus + alerts]
+        GR[Grafana]
+        LF[Langfuse]
+    end
+
+    Users --> NG --> API
+    NG -. OIDC login .-> KC
+    API -. validate JWT .-> KC
+    API -->|"write prospect, enqueue,<br/>LISTEN events"| S1 & S5
+    W -->|poll jobs SKIP LOCKED| S5
+    W -->|state| S2
+    W -->|retrieve| S3
+    W -->|hard rules| S4
+    W -->|events NOTIFY| S1
+    S1 -. projection .-> S6
+    W ==>|"pseudonymized prompts only"| OR
+    W --- EMB
+    PR -. scrape /metrics .-> App
+    GR --> PR
+    GR -->|read-only role| S6
+    W -. LLM traces .-> LF

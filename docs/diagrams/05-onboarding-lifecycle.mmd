@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> received
+    received --> processing: job picked
+    processing --> awaiting_analyst: escalation (interrupt)
+    processing --> awaiting_client: info requested (interrupt)
+    awaiting_analyst --> processing: analyst decision
+    awaiting_client --> processing: client reply
+    awaiting_client --> expired: timeout
+    processing --> approved
+    processing --> approved_edd
+    processing --> rejected
+    processing --> failed: unrecoverable error (fail closed)
+    failed --> awaiting_analyst: dead-letter review
+    approved --> [*]
+    approved_edd --> [*]
+    rejected --> [*]
+    expired --> [*]

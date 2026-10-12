@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    actor C as Applicant (React)
+    participant N as Nginx
+    participant API as FastAPI
+    participant Q as Postgres queue
+    participant W as Worker (LangGraph)
+    participant LLM as OpenRouter
+    participant DB as Postgres (state, events)
+    actor A as Analyst (React)
+
+    C->>N: POST /api/v1/onboarding/start
+    N->>API: forward (round robin)
+    API->>DB: store prospect (encrypted), onboarding=received
+    API->>Q: enqueue run(onboarding_id)
+    API-->>C: 202 {onboarding_id, events_url}
+    C->>API: GET /onboarding/{id}/events (SSE)
+    W->>Q: pick job (SKIP LOCKED)
+    W->>LLM: supervisor: what next? (pseudonymized)
+    LLM-->>W: [identity, risk]
+    par parallel agents
+        W->>W: identity agent -> verify_identity
+    and
+        W->>W: risk agent -> check_risk_lists
+    end
+    W->>DB: checkpoint + events (NOTIFY)
+    DB-->>API: NOTIFY
+    API-->>C: SSE: identity 0.65 (low), risk low
+    W->>LLM: supervisor: next?
+    LLM-->>W: remediation
+    W->>W: guard OK, remediation plan (RAG citations)
+    W->>DB: interrupt, status=awaiting_analyst
+    API-->>C: SSE: under review
+    A->>API: GET /reviews?status=pending
+    A->>API: POST /reviews/{id}/decision {approve, notes}
+    API->>Q: enqueue resume(Command(resume=...))
+    W->>DB: load checkpoint, continue
+    W->>W: documentation -> response -> finalize
+    API-->>C: SSE: approved + required documents

@@ -1,0 +1,54 @@
+[project]
+name = "onboarding"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "cryptography>=50.0.2",
+    "en-core-web-sm",
+    "fastapi>=0.143.0",
+    "fastembed>=0.9.0",
+    "httpx>=0.28.1",
+    "langchain>=1.4.5",
+    "langchain-openai>=1.7.1",
+    "langgraph>=1.2.15",
+    "langgraph-checkpoint-postgres>=3.1.2",
+    "pgvector>=0.5.1",
+    "presidio-analyzer>=2.2.364",
+    "presidio-anonymizer>=2.2.362",
+    "procrastinate>=3.10.0",
+    "prometheus-client>=0.26.0",
+    "psycopg[binary,pool]>=3.3.6",
+    "pycryptodome>=3.24.1",
+    "pydantic-settings>=2.15.0",
+    "pyjwt[crypto]>=2.15.1",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1.4",
+    "sse-starlette>=3.5.0",
+    "structlog>=26.1.0",
+    "tenacity>=9.2.1",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.0",
+    "testcontainers>=4.15.0",
+]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["live: hits the real OpenRouter LLM (run with -m live)"]
+addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 120
