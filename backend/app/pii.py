@@ -76,3 +76,26 @@ _DIGITS = re.compile(r"\b\d{6,}\b")
 def mask_log_value(value: str) -> str:
     """structlog processor helper: mask long digit runs (IDs, accounts)."""
     return _DIGITS.sub(lambda m: mask_document(m.group()), value)
+
+
+# ---------------------------------------------------------------- vault (encrypted PII rows)
+def store_prospect(name: str, document_id: str) -> str:
+    from app import db
+
+    row = db.fetch_one(
+        "INSERT INTO app.prospects (name_enc, document_id_enc, document_hash) VALUES (%s,%s,%s) RETURNING id",
+        encrypt(name),
+        encrypt(document_id),
+        lookup_hash(document_id),
+    )
+    return str(row["id"])  # type: ignore[index]
+
+
+def load_prospect(prospect_id: str) -> tuple[str, str]:
+    """Only tools and the final render call this. Never put the result into graph state or prompts."""
+    from app import db
+
+    row = db.fetch_one("SELECT name_enc, document_id_enc FROM app.prospects WHERE id = %s", prospect_id)
+    if not row:
+        raise LookupError("prospect purged or missing")
+    return decrypt(row["name_enc"]), decrypt(row["document_id_enc"])

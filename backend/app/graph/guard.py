@@ -75,9 +75,7 @@ def check(rules: list[Rule], state: dict, verdict: str | None = None) -> list[Vi
             out.append(Violation(r.code, r.effect, r.description))
         elif verdict is None:
             continue
-        elif r.effect == "require_human_review" and human is None:
-            out.append(Violation(r.code, r.effect, r.description))
-        elif r.effect == "block_approval" and verdict in APPROVALS and human != "approve":
+        elif r.effect == "require_human_review" and human is None or r.effect == "block_approval" and verdict in APPROVALS and human != "approve":
             out.append(Violation(r.code, r.effect, r.description))
     # Built-in invariant (a tag check, not routing): an analyst decision is binding.
     if verdict is not None and human == "reject" and verdict != "rejected":

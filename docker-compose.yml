@@ -1,5 +1,17 @@
 name: onboarding
 
+x-backend: &backend
+  build: {context: ., dockerfile: backend/Dockerfile}
+  image: onboarding-backend:local
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    JWT_PRIVATE_KEY_PATH: /srv/infra/dev-jwt/private.pem
+  volumes:
+    - ./knowledge:/srv/knowledge:ro
+    - devjwt:/srv/infra/dev-jwt
+  restart: unless-stopped
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -7,14 +19,44 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports: ["5442:5432"]
+    ports: ["5442:5432"]   # host port only for local tooling
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
-      retries: 10
+      retries: 20
+    restart: unless-stopped
+
+  migrate:   # one-off: schema migrations + knowledge ingestion, then exits
+    <<: *backend
+    command: sh -c "alembic upgrade head && python -m app.rag"
+    restart: "no"
+    depends_on: {postgres: {condition: service_healthy}}
+
+  api:
+    <<: *backend
+    deploy: {replicas: 2}
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"]
+      interval: 10s
+      retries: 5
+
+  worker:
+    <<: *backend
+    command: procrastinate --app=app.worker.queue worker --concurrency 4
+    deploy: {replicas: 2}
+    stop_grace_period: 60s   # let in-flight graph steps finish; checkpoints make the rest resumable
+    depends_on: {migrate: {condition: service_completed_successfully}}
+
+  web:   # nginx: load balancer + React static build
+    build: {context: ., dockerfile: frontend/Dockerfile}
+    ports: ["4000:80"]
+    depends_on: {api: {condition: service_healthy}}
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  devjwt:

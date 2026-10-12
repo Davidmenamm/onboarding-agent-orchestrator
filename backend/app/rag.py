@@ -2,6 +2,7 @@
 front-matter (structured facts, e.g. required documents) goes to rag.documents.metadata,
 prose sections go to rag.chunks (vector + full-text)."""
 import hashlib
+import os
 import math
 import re
 from functools import lru_cache
@@ -23,14 +24,14 @@ MIN_RELEVANCE = 0.30  # below this the best hit is "not really about the questio
 def _embedder():
     from fastembed import TextEmbedding
 
-    return TextEmbedding("BAAI/bge-small-en-v1.5")
+    return TextEmbedding("BAAI/bge-small-en-v1.5", cache_dir=os.environ.get("FASTEMBED_CACHE_PATH"))
 
 
 @lru_cache
 def _reranker():
     from fastembed.rerank.cross_encoder import TextCrossEncoder
 
-    return TextCrossEncoder("Xenova/ms-marco-MiniLM-L-6-v2")
+    return TextCrossEncoder("Xenova/ms-marco-MiniLM-L-6-v2", cache_dir=os.environ.get("FASTEMBED_CACHE_PATH"))
 
 
 def embed(texts: list[str]) -> list[np.ndarray]:
@@ -40,7 +41,7 @@ def embed(texts: list[str]) -> list[np.ndarray]:
 # ---------------------------------------------------------------- ingestion
 def parse(path: Path) -> tuple[dict, list[tuple[str, str]]]:
     raw = path.read_text()
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", raw, re.S)
+    m = re.match(r"^---\n(.*?)\n---\n(.*)$", raw, re.DOTALL)
     if not m:
         raise ValueError(f"{path}: missing front-matter")
     meta, body = yaml.safe_load(m.group(1)), m.group(2)
@@ -161,3 +162,7 @@ def product_policy(product: str) -> dict | None:
 def products() -> list[dict]:
     rows = db.fetch("SELECT product_code, metadata->>'label' AS label FROM rag.documents WHERE doc_type='product_policy'")
     return [{"code": r["product_code"], "label": r["label"]} for r in rows]
+
+
+if __name__ == "__main__":
+    print(ingest())

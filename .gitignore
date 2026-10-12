@@ -11,3 +11,4 @@ frontend/test-results/
 frontend/playwright-report/
 *.png:Zone.Identifier
 Screenshot_*.png
+infra/dev-jwt/
